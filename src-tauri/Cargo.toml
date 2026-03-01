@@ -27,4 +27,5 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 configparser = "3.1.0"
 dirs = "6.0.0"
-
+fix-path-env = { git = "https://github.com/tauri-apps/fix-path-env-rs" }
+tauri-plugin-os = "2"

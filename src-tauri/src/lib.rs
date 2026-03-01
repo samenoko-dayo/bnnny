@@ -44,8 +44,7 @@ fn parse_profiles(root_dir: Option<PathBuf>) -> Vec<ProfileInfo> {
 
         if let (Some(n), Some(p)) = (name, path_str) {
             let full_path = if is_relative {
-                // Windowsのバックスラッシュに対応
-                root.join(p.replace('/', "\\"))
+                root.join(p)
             } else {
                 PathBuf::from(p)
             };
@@ -107,7 +106,10 @@ fn get_ffmpeg_path() -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "macos")]
+    let _ = fix_path_env::fix();
     tauri::Builder::default()
+        .plugin(tauri_plugin_os::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_opener::init())

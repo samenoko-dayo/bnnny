@@ -4,6 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { Command } from "@tauri-apps/plugin-shell";
 import { open } from "@tauri-apps/plugin-dialog";
 import { homeDir } from "@tauri-apps/api/path";
+import { platform } from "@tauri-apps/plugin-os";
 import { Input } from "./components/ui/input";
 import { Button } from "./components/ui/button";
 import { Progress } from "./components/ui/progress";
@@ -49,6 +50,7 @@ const downloading = ref(false);
 // ブラウザプロファイル
 const browserProfiles = ref<BrowserProfiles | null>(null);
 const selectedCookieArg = ref("");
+const current_platform = platform();
 
 // ログ系のユーティリティ
 watch(
@@ -214,7 +216,7 @@ const download = async (type: "audio" | "normal") => {
     addLog(`オプション: ${ydlopts.join(" ")}`, "info");
 
     const cmd = Command.sidecar("binaries/yt-dlp", ydlopts, {
-        encoding: "shift_jis",
+        encoding: current_platform === "windows" ? "shift_jis" : "utf-8"
     });
 
     cmd.stdout.on("data", (data) => {
