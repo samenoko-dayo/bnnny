@@ -30,6 +30,7 @@
       ]
     },
     "dialog:default",
-    "os:default"
+    "os:default",
+    "store:default"
   ]
 }

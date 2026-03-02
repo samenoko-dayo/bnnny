@@ -5,6 +5,7 @@ import { Command } from "@tauri-apps/plugin-shell";
 import { open } from "@tauri-apps/plugin-dialog";
 import { homeDir } from "@tauri-apps/api/path";
 import { platform } from "@tauri-apps/plugin-os";
+import { load } from "@tauri-apps/plugin-store";
 import { Input } from "./components/ui/input";
 import { Button } from "./components/ui/button";
 import { Progress } from "./components/ui/progress";
@@ -17,6 +18,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
+import { FileVideoCamera, Folder, FileHeadphone } from "lucide-vue-next";
 
 // 型定義
 interface Log {
@@ -81,9 +83,35 @@ async function fetchProfiles() {
 onMounted(async () => {
     downloading.value = true;
 
+    // Store initialization
+    const store = await load("settings.json");
+
     deno_path.value = await invoke<string>("get_deno_path");
     ffmpeg_path.value = await invoke<string>("get_ffmpeg_path");
-    output_path.value = await homeDir();
+
+    // Load saved settings
+    const saved_output_path = await store.get<string>("output_path");
+    if (saved_output_path) {
+        output_path.value = saved_output_path;
+    } else {
+        output_path.value = await homeDir();
+    }
+
+    const saved_cookie = await store.get<string>("selectedCookieArg");
+    if (saved_cookie) {
+        selectedCookieArg.value = saved_cookie;
+    }
+
+    // Watch for changes and save to store
+    watch(output_path, async (newVal) => {
+        await store.set("output_path", newVal);
+        await store.save();
+    });
+
+    watch(selectedCookieArg, async (newVal) => {
+        await store.set("selectedCookieArg", newVal);
+        await store.save();
+    });
 
     await fetchProfiles();
 
@@ -258,7 +286,7 @@ const download = async (type: "audio" | "normal") => {
 
             <div class="flex flex-row items-center gap-2">
                 <Input v-model="output_path" placeholder="保存先" />
-                <Button @click="pick_savedir">選択</Button>
+                <Button @click="pick_savedir"><Folder />選択</Button>
             </div>
 
             <div class="flex flex-col gap-1">
@@ -313,8 +341,8 @@ const download = async (type: "audio" | "normal") => {
         </div>
 
         <div class="grid grid-cols-2 gap-2">
-            <Button @click="download('normal')" :disabled="downloading">動画+音声</Button>
-            <Button @click="download('audio')" :disabled="downloading">音声のみ</Button>
+            <Button @click="download('normal')" :disabled="downloading"><FileVideoCamera />動画+音声</Button>
+            <Button @click="download('audio')" :disabled="downloading"><FileHeadphone />音声のみ</Button>
         </div>
     </main>
 </template>
