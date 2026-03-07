@@ -106,7 +106,6 @@ fn get_ffmpeg_path() -> Result<String, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    #[cfg(target_os = "macos")]
     let _ = fix_path_env::fix();
     tauri::Builder::default()
         .plugin(tauri_plugin_store::Builder::new().build())
