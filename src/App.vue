@@ -40,8 +40,8 @@ interface BrowserProfiles {
 
 // 状態管理
 const url_input = ref("");
-const deno_path = ref("");
-const ffmpeg_path = ref("");
+const deno_path = ref<string | null>(null);
+const ffmpeg_path = ref<string | null>(null);
 const output_path = ref("");
 const log = ref<Log[]>([]);
 const logArea = ref<HTMLElement | null>(null);
@@ -79,72 +79,113 @@ async function fetchProfiles() {
     }
 }
 
-// 起動時の処理
-onMounted(async () => {
-    downloading.value = true;
+async function safeInvoke<T>(command: string): Promise<T | null> {
+  try {
+    return await invoke<T>(command);
+  } catch (e) {
+    console.warn(`${command} failed:`, e);
+    return null;
+  }
+}
 
-    // Store initialization
+async function runYtDlpUpdate() {
+  const updateDLP = Command.sidecar("binaries/yt-dlp", ["-U"], {
+    encoding: "shift_jis",
+  });
+
+  updateDLP.stdout.on("data", (data) => {
+    addLog(data.trim(), "info");
+  });
+
+  updateDLP.stderr.on("data", (data) => {
+    addLog(data.trim(), "err");
+  });
+
+  addLog("[ℹ️] yt-dlpのアップデートを確認しています…", "info");
+
+  return new Promise<void>(async (resolve, reject) => {
+    try {
+      updateDLP.on("close", () => {
+        resolve();
+      });
+
+      await updateDLP.spawn();
+    } catch (e) {
+      reject(e);
+    }
+  });
+}
+
+onMounted(async () => {
+  downloading.value = true;
+  downloadStatus.value = "初期化中…";
+
+  try {
     const store = await load("settings.json");
 
-    deno_path.value = await invoke<string>("get_deno_path");
-    ffmpeg_path.value = await invoke<string>("get_ffmpeg_path");
+    const [
+      denoResult,
+      ffmpegResult,
+      savedOutputPath,
+      savedCookie,
+      defaultHomeDir,
+    ] = await Promise.all([
+      safeInvoke<string>("get_deno_path"),
+      safeInvoke<string>("get_ffmpeg_path"),
+      store.get<string>("output_path"),
+      store.get<string>("selectedCookieArg"),
+      homeDir(),
+    ]);
 
-    // Load saved settings
-    const saved_output_path = await store.get<string>("output_path");
-    if (saved_output_path) {
-        output_path.value = saved_output_path;
-    } else {
-        output_path.value = await homeDir();
-    }
+    deno_path.value = denoResult;
+    ffmpeg_path.value = ffmpegResult;
+    output_path.value = savedOutputPath || defaultHomeDir;
+    selectedCookieArg.value = savedCookie || "";
 
-    const saved_cookie = await store.get<string>("selectedCookieArg");
-    if (saved_cookie) {
-        selectedCookieArg.value = saved_cookie;
-    }
-
-    // Watch for changes and save to store
     watch(output_path, async (newVal) => {
+      try {
         await store.set("output_path", newVal);
         await store.save();
+      } catch (e) {
+        console.error("failed to save output_path:", e);
+      }
     });
 
     watch(selectedCookieArg, async (newVal) => {
+      try {
         await store.set("selectedCookieArg", newVal);
         await store.save();
+      } catch (e) {
+        console.error("failed to save selectedCookieArg:", e);
+      }
     });
 
     await fetchProfiles();
 
-    const updateDLP = Command.sidecar("binaries/yt-dlp", ["-U"], {
-        encoding: "shift_jis",
-    });
-
-    updateDLP.stdout.on("data", (data) => {
-        addLog(data.trim(), "info");
-    });
-
-    updateDLP.stderr.on("data", (data) => {
-        addLog(data.trim(), "err");
-    });
-
-    addLog(`[ℹ️] yt-dlpのアップデートを確認しています…`, "info");
-    await updateDLP.spawn();
-
     if (!deno_path.value) {
-        addLog("[⚠] denoが見つかりませんでした。", "warn");
+      addLog("[⚠] denoが見つかりませんでした。", "warn");
     } else {
-        addLog(`[ℹ️] denoが見つかりました: ${deno_path.value}`, "info");
+      addLog(`[ℹ️] denoが見つかりました: ${deno_path.value}`, "info");
     }
+
     if (!ffmpeg_path.value) {
-        addLog("[⚠] ffmpegがインストールされていません。", "warn");
+      addLog("[⚠] ffmpegがインストールされていません。", "warn");
     } else {
-        addLog(`[ℹ️] ffmpegが見つかりました: ${ffmpeg_path.value}`, "info");
+      addLog(`[ℹ️] ffmpegが見つかりました: ${ffmpeg_path.value}`, "info");
     }
+
+    downloadStatus.value = "yt-dlpの更新確認中…";
+    await runYtDlpUpdate();
+
     downloadStatus.value = "起動完了。";
-    updateDLP.on("close", () => {
-        downloading.value = false;
-        addLog(`[ℹ️] 初期化完了`, "info");
-    });
+    addLog("[ℹ️] 初期化完了", "info");
+  } catch (e) {
+    console.error("initialization failed:", e);
+    addLog(`[❌] 初期化中にエラーが発生しました: ${String(e)}`, "err");
+    downloadStatus.value = "初期化に失敗しました。";
+  } finally {
+    downloading.value = false;
+  }
 });
 
 // 保存先の選択
